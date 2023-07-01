@@ -1,5 +1,5 @@
 # shiny_examples
- Various examples of Shiny applications. Examples vary in terms of plots, functionality, and complexity. Multiple examples are provided for plots for educational pruposes.
+This repo contains shiny examples geared toward analysis, education, and establishing a base of templates for different types of plots.
 
 ## Analysis
 Shiny applications designed to do specific types of analyses. Often these applications are loaded with libraries or custom functions to quickly look at statistical information.
