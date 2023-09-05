@@ -1,3 +1,6 @@
+# Hosted: https://elkronos.shinyapps.io/bar_time/
+
+# Library
 library(shiny)
 library(plotly)
 library(ggplot2)
@@ -119,7 +122,8 @@ ui <- fluidPage(
       fileInput("file", "Choose CSV File", accept = ".csv"),
       numericInput("window_size", "Window Size:", value = 7, min = 1),
       selectInput("bar_stat", "Bar Statistic:", choices = c("sum", "mean", "median"), selected = "sum"),
-      selectInput("line_stat", "Line Statistic:", choices = c("mean", "median", "max", "min"), selected = "mean")
+      selectInput("line_stat", "Line Statistic:", choices = c("mean", "median", "max", "min"), selected = "mean"),
+      selectInput("group_by", "Group By:", choices = c("day", "month", "quarter", "year"), selected = "month")  # New UI element for group_by
     ),
     mainPanel(
       plotlyOutput("plot")
@@ -127,7 +131,6 @@ ui <- fluidPage(
   )
 )
 
-# Define server logic
 # Define server logic
 server <- function(input, output, session) {
   
@@ -146,9 +149,8 @@ server <- function(input, output, session) {
     date_col <- "date"
     y_col <- "value"
     
-    date_range <- range(as.Date(data[[date_col]]))
-    
-    group_by <- determine_grouping(date_range)
+    # Use the group_by input from the UI directly to set the group_by parameter
+    group_by <- input$group_by
     
     plot <- bar_time(data, date_col, y_col, group_by, input$window_size, input$bar_stat, input$line_stat)
     
@@ -156,6 +158,7 @@ server <- function(input, output, session) {
   })
   
 }
+
 
 # Run the application 
 shinyApp(ui = ui, server = server)
