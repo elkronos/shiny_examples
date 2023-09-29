@@ -1,8 +1,20 @@
+# Load packages
 library(MASS)
 library(ggplot2)
 library(fitdistrplus)
+library(shiny)
 
+# Make example which can be reproduced
 set.seed(123)
+
+# Create a data frame with multiple columns to upload
+# sampleData <- data.frame(
+#   gamma = rgamma(1000, shape = 2, scale = 2),
+#   exponential = rexp(1000, rate = 0.5),
+#   poisson = rpois(1000, lambda = 3)
+# )
+# Write the data frame to a CSV file
+# write.csv(sampleData, "sampleData.csv", row.names = FALSE)
 
 # Density function
 density_fun <- function(dist, x, params) {
@@ -124,47 +136,53 @@ find_distribution <- function(data_frame, column, plot = FALSE, use_bic = FALSE,
   }
 }
 
-library(shiny)
-library(shinydashboard)
+# Fake data
+syntheticData <- data.frame(value = rgamma(1000, shape = 2, scale = 2))
 
-ui <- dashboardPage(
-  dashboardHeader(title = "Distribution Finder"),
-  dashboardSidebar(
-    selectInput("dataset", "Select a dataset:", choices = c("Gaussian", "Poisson", "Exponential", "Gamma", "Log-normal")),
-    radioButtons("info_criterion", "Information Criterion:", choices = c("AIC", "BIC"))
-  ),
-  dashboardBody(
-    box(plotOutput("distPlot", width = "100%")),
-    box(textOutput("bestDist"))
+ui <- fluidPage(
+  titlePanel("Find Best Distribution for Dataset"),
+  sidebarLayout(
+    sidebarPanel(
+      fileInput("file1", "Choose CSV File",
+                accept = c("text/csv",
+                           "text/comma-separated-values,text/plain",
+                           ".csv")),
+      tags$hr(),
+      checkboxInput("header", "Header", TRUE),
+      uiOutput("varSelectUI")
+    ),
+    mainPanel(
+      plotOutput("distPlot")
+    )
   )
 )
 
-server <- function(input, output) {
-  # Define a reactive expression for the selected dataset
-  dataset <- reactive({
-    switch(input$dataset,
-           "Gaussian" = rnorm(1000, mean = 10, sd = 2),
-           "Poisson" = rpois(1000, lambda = 4),
-           "Exponential" = rexp(1000, rate = 0.5),
-           "Gamma" = rgamma(1000, shape = 2, rate = 0.5),
-           "Log-normal" = rlnorm(1000, meanlog = 1, sdlog = 0.5)
-    )
+server <- function(input, output, session) {
+  data <- reactiveVal(syntheticData)
+  
+  observeEvent(input$file1, {
+    inFile <- input$file1
+    if (is.null(inFile)) return(NULL) # Added this check
+    
+    newData <- read.csv(inFile$datapath, header = input$header)
+    if (length(grep("numeric", sapply(newData, class))) == 0) return(NULL) # Check if there's at least one numeric column
+    data(newData)
   })
   
-  # Find the best distribution and output the plot
+  output$varSelectUI <- renderUI({
+    df <- data()
+    numCols <- sapply(df, is.numeric)
+    if (length(names(df)[numCols]) == 0) return(NULL) # Check if there are numeric columns available
+    selectInput("var", "Select variable:", names(df)[numCols])
+  })
+  
   output$distPlot <- renderPlot({
-    df <- data.frame(data = dataset())
-    best_dist <- find_distribution(df, "data", plot = FALSE, use_bic = input$info_criterion == "BIC", return_all_info = TRUE)
-    fitted_data <- r_fun(best_dist$best_distribution, length(df$data), coef(best_dist$fits[[best_dist$best_distribution]]))
-    plot_overlapping_histograms(df$data, fitted_data, best_dist$best_distribution)
-  })
-  
-  # Output the name of the best distribution
-  output$bestDist <- renderText({
-    df <- data.frame(data = dataset())
-    best_dist <- find_distribution(df, "data", plot = FALSE, use_bic = input$info_criterion == "BIC")
-    paste("The best distribution for the", tolower(input$dataset), "data is:", best_dist)
-  })
+    df <- data()
+    var <- req(input$var)
+    if (!is.null(var) && var %in% names(df)) { # Check if var is not NULL and exists in df
+      find_distribution(df, var, plot = TRUE)
+    }
+  }, res = 96)
 }
 
 shinyApp(ui = ui, server = server)
