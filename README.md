@@ -9,7 +9,3 @@ This folder contains step-by-step examples of shiny applications with different 
 
 ## Templates
 These applications are designed to serve as templates with multiple features so that the user can quickly remove/adjust things to fit their project.
-
-# Contact
-- email: napoleonic_bores@proton.me
-- discord: elkronos
