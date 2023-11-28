@@ -11,7 +11,7 @@ library(stringr)
 library(forcats)
 
 # Load your data
-data <- read_csv("C:/Users/JChas/OneDrive/Desktop/exampleshiny/data.csv",
+data <- read_csv("data.csv",
                  show_col_types = FALSE)
 
 # Ensure required columns are present
