@@ -10,6 +10,9 @@ library(tidyr)
 library(reshape2)
 library(stringr)
 library(forcats)
+library(rlang)
+library(plotly)
+library(shinyWidgets)
 
 setwd("C:/your/path")
 data <- read_csv("data.csv")
@@ -111,22 +114,30 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("countryInput", "Choose a Country:", choices = unique(melted_data$Country)),
-      checkboxInput("toggleView", "Toggle Grand Median Difference View", FALSE)
+      checkboxInput("toggleView", "Toggle Grand Median Difference View", FALSE),
+      pickerInput(
+        "yearInput",
+        "Select Years:",
+        choices = unique(melted_data$RetractionYear),
+        selected = unique(melted_data$RetractionYear)[(length(unique(melted_data$RetractionYear))-4):length(unique(melted_data$RetractionYear))],
+        multiple = TRUE,
+        options = list(`actions-box` = TRUE, `deselect-all-text` = "Deselect all", `select-all-text` = "Select all")
+      )
     ),
     mainPanel(
       tabsetPanel(
         tabPanel("Visualization", plotlyOutput("countryPlot", width = "100%", height = "600px")),
         tabPanel("Analysis Details", 
                  HTML("<h3>Dashboard Overview</h3>
-               <p>This dashboard, leveraging the Retraction Watch database, visualizes the distribution of retracted journal articles across different countries, categorized by reasons for retraction and year. The data, updated as of November 27, 2023, encompasses over 48,000 retractions. More details about the Retraction Watch initiative can be found <a href='https://www.crossref.org/blog/news-crossref-and-retraction-watch/' target='_blank'>here</a>.</p>
-               <p>The default view shows the percentage of retractions, color-coded by the median value for each country. A toggle feature enables comparison with the grand median across the entire dataset.</p>
-               <h3>Key Considerations</h3>
-               <ol>
-                 <li>The categorization of retraction reasons, while subjective, can be customized. The ETL and Shiny app code are available <a href='https://github.com/elkronos/shiny_examples/blob/main/analysis/retraction_watch_by_country.R' target='_blank'>here</a> for further exploration.</li>
-                 <li>Analysis excludes 'null' or 'unknown' countries. Only countries with 250+ retractions in the last decade are included, balancing aesthetic and UI simplicity.</li>
-                 <li>The purpose of this dashboard is analytical, not punitive. It aims to uncover patterns in retraction reasons, which may vary by country due to diverse factors.</li>
-                 <li>Each article is attributed to all listed countries, assumed to be the countries of the affiliated authors. Future enhancements may include weighting by author order.</li>
-               </ol>")
+                 <p>This dashboard, leveraging the Retraction Watch database, visualizes the distribution of retracted journal articles across different countries, categorized by reasons for retraction and year. The data, updated as of November 27, 2023, encompasses over 48,000 retractions. More details about the Retraction Watch initiative can be found <a href='https://www.crossref.org/blog/news-crossref-and-retraction-watch/' target='_blank'>here</a>.</p>
+                 <p>The default view shows the percentage of retractions, color-coded by the median value for each country. A toggle feature enables comparison with the grand median across the entire dataset.</p>
+                 <h3>Key Considerations</h3>
+                 <ol>
+                  <li>The categorization of retraction reasons, while subjective, can be customized. The ETL and Shiny app code are available <a href='https://github.com/elkronos/shiny_examples/blob/main/analysis/retraction_watch_by_country.R' target='_blank'>here</a> for further exploration.</li>
+                  <li>Analysis excludes 'null' or 'unknown' countries. Only countries with 250+ retractions in the last decade are included, balancing aesthetic and UI simplicity.</li>
+                  <li>The purpose of this dashboard is analytical, not punitive. It aims to uncover patterns in retraction reasons, which may vary by country due to diverse factors.</li>
+                  <li>Each article is attributed to all listed countries, assumed to be the countries of the affiliated authors. Future enhancements may include weighting by author order.</li>
+                </ol>")
         )
       )
     )
@@ -136,7 +147,9 @@ ui <- fluidPage(
 # Shiny Server
 server <- function(input, output) {
   output$countryPlot <- renderPlotly({
-    country_data <- melted_data %>% filter(Country == input$countryInput)
+    # Filter data based on selected country and years
+    country_data <- melted_data %>% 
+      filter(Country == input$countryInput, RetractionYear %in% input$yearInput)
     
     # Decide which value to use based on toggle
     value_column <- ifelse(input$toggleView, "diff_from_grand_median", "value")
