@@ -108,6 +108,10 @@ country_list <- unique(melted_data$Country)
 # saveRDS(melted_data, file = "melted_data.rds")
 # saveRDS(country_list, file = "country_list.rds")
 
+# If you want to host this, separate the above ETL and save the melted data and country list as RDS. 
+# You can use the code above. Then move them to the same directory with the Shiny app portion and add readRDS() for the objects to import them when the app runs.
+# Make sure you import them as "melted_data" and "country_list".
+
 # Shiny UI
 ui <- fluidPage(
   titlePanel("Retraction Data Analysis"),
@@ -130,7 +134,7 @@ ui <- fluidPage(
         tabPanel("Analysis Details", 
                  HTML("<h3>Dashboard Overview</h3>
                  <p>This dashboard, leveraging the Retraction Watch database, visualizes the distribution of retracted journal articles across different countries, categorized by reasons for retraction and year. The data, updated as of November 27, 2023, encompasses over 48,000 retractions. More details about the Retraction Watch initiative can be found <a href='https://www.crossref.org/blog/news-crossref-and-retraction-watch/' target='_blank'>here</a>.</p>
-                 <p>The default view shows the percentage of retractions, color-coded by the median value for each country. A toggle feature enables comparison with the grand median across the entire dataset.</p>
+                 <p>The default view shows the percentage of retractions, color-coded by the median value for each country. A toggle feature enables comparison with the grand median across the entire dataset. Selecting the toggle will also switch the coloring from being based on the country to the grand median.</p>
                  <h3>Key Considerations</h3>
                  <ol>
                   <li>The categorization of retraction reasons, while subjective, can be customized. The ETL and Shiny app code are available <a href='https://github.com/elkronos/shiny_examples/blob/main/analysis/retraction_watch_by_country.R' target='_blank'>here</a> for further exploration.</li>
@@ -152,10 +156,18 @@ server <- function(input, output) {
       filter(Country == input$countryInput, RetractionYear %in% input$yearInput)
     
     # Decide which value to use based on toggle
-    value_column <- ifelse(input$toggleView, "diff_from_grand_median", "value")
-    label_format <- ifelse(input$toggleView, "%.2f", "%.1f%%")
-    fill_midpoint <- if(input$toggleView) 0 else median(country_data[[value_column]], na.rm = TRUE)
+    if(input$toggleView) {
+      value_column <- "diff_from_grand_median"
+      label_format <- "%.2f"
+      fill_midpoint <- 0
+    } else {
+      value_column <- "value"
+      label_format <- "%.1f%%"
+      # Use overall median instead of per-country median
+      fill_midpoint <- median(melted_data$value, na.rm = TRUE)
+    }
     
+    # Construct the plot
     p <- ggplot(country_data, aes(x = RetractionYear, y = variable, fill = .data[[value_column]])) +
       geom_tile(color = "white") +
       geom_text(aes(label = sprintf(label_format, .data[[value_column]])), vjust = 1, size = 3, color = "black") +
@@ -176,6 +188,7 @@ server <- function(input, output) {
         legend.text = element_text(size = 8)
       )
     
+    # Convert ggplot object to plotly
     ggplotly(p) %>%
       layout(
         autosize = TRUE,
