@@ -1,5 +1,6 @@
 # Get data here: https://www.crossref.org/blog/news-crossref-and-retraction-watch/
 # See analysis script here: https://github.com/elkronos/public_examples/blob/main/examples/retraction_watch_analysis.R
+# Hosted here: https://elkronos.shinyapps.io/Retractions/
 
 library(readr)
 library(dplyr)
@@ -10,9 +11,8 @@ library(reshape2)
 library(stringr)
 library(forcats)
 
-# Load your data
-data <- read_csv("data.csv",
-                 show_col_types = FALSE)
+setwd("C:/your/path")
+data <- read_csv("data.csv")
 
 # Ensure required columns are present
 required_columns <- c('RetractionDate', 'Country', 'Reason')
@@ -79,6 +79,17 @@ grouped_data <- data_filtered %>%
 
 melted_data <- melt(grouped_data, id.vars = c("Country", "RetractionYear"))
 
+# Calculate Grand Median for Each Category
+grand_medians <- melted_data %>%
+  group_by(variable) %>%
+  summarise(grand_median = median(value, na.rm = TRUE))
+
+# Join the grand medians with the melted data
+melted_data <- left_join(melted_data, grand_medians, by = "variable")
+
+# Calculate the difference from the grand median
+melted_data$diff_from_grand_median <- melted_data$value - melted_data$grand_median
+
 melted_data$variable <- gsub("_", " ", melted_data$variable)
 melted_data$variable <- factor(melted_data$variable, levels = sort(unique(melted_data$variable)))
 
@@ -91,29 +102,51 @@ melted_data$variable <- factor(melted_data$variable, levels = ordered_categories
 # Create a vector of countries for dropdown
 country_list <- unique(melted_data$Country)
 
-# UI Section
+# saveRDS(melted_data, file = "melted_data.rds")
+# saveRDS(country_list, file = "country_list.rds")
+
+# Shiny UI
 ui <- fluidPage(
   titlePanel("Retraction Data Analysis"),
   sidebarLayout(
     sidebarPanel(
-      selectInput("countryInput", "Choose a Country:", choices = country_list)
+      selectInput("countryInput", "Choose a Country:", choices = unique(melted_data$Country)),
+      checkboxInput("toggleView", "Toggle Grand Median Difference View", FALSE)
     ),
     mainPanel(
-      plotOutput("countryPlot")
+      tabsetPanel(
+        tabPanel("Visualization", plotlyOutput("countryPlot", width = "100%", height = "600px")),
+        tabPanel("Analysis Details", 
+                 HTML("<h3>Dashboard Overview</h3>
+               <p>This dashboard, leveraging the Retraction Watch database, visualizes the distribution of retracted journal articles across different countries, categorized by reasons for retraction and year. The data, updated as of November 27, 2023, encompasses over 48,000 retractions. More details about the Retraction Watch initiative can be found <a href='https://www.crossref.org/blog/news-crossref-and-retraction-watch/' target='_blank'>here</a>.</p>
+               <p>The default view shows the percentage of retractions, color-coded by the median value for each country. A toggle feature enables comparison with the grand median across the entire dataset.</p>
+               <h3>Key Considerations</h3>
+               <ol>
+                 <li>The categorization of retraction reasons, while subjective, can be customized. The ETL and Shiny app code are available <a href='https://github.com/elkronos/shiny_examples/blob/main/analysis/retraction_watch_by_country.R' target='_blank'>here</a> for further exploration.</li>
+                 <li>Analysis excludes 'null' or 'unknown' countries. Only countries with 250+ retractions in the last decade are included, balancing aesthetic and UI simplicity.</li>
+                 <li>The purpose of this dashboard is analytical, not punitive. It aims to uncover patterns in retraction reasons, which may vary by country due to diverse factors.</li>
+                 <li>Each article is attributed to all listed countries, assumed to be the countries of the affiliated authors. Future enhancements may include weighting by author order.</li>
+               </ol>")
+        )
+      )
     )
   )
 )
 
-# Server Section
+# Shiny Server
 server <- function(input, output) {
-  output$countryPlot <- renderPlot({
+  output$countryPlot <- renderPlotly({
     country_data <- melted_data %>% filter(Country == input$countryInput)
-    median_value <- median(country_data$value, na.rm = TRUE)
     
-    ggplot(country_data, aes(x = RetractionYear, y = variable, fill = value)) +
-      geom_tile(color = "white") +  # Add borders to the tiles
-      geom_text(aes(label = sprintf("%.1f%%", value)), vjust = 1, size = 3, color = "black") +
-      scale_fill_gradient2(low = "steelblue", mid = "white", high = "salmon", midpoint = median_value) +
+    # Decide which value to use based on toggle
+    value_column <- ifelse(input$toggleView, "diff_from_grand_median", "value")
+    label_format <- ifelse(input$toggleView, "%.2f", "%.1f%%")
+    fill_midpoint <- if(input$toggleView) 0 else median(country_data[[value_column]], na.rm = TRUE)
+    
+    p <- ggplot(country_data, aes(x = RetractionYear, y = variable, fill = .data[[value_column]])) +
+      geom_tile(color = "white") +
+      geom_text(aes(label = sprintf(label_format, .data[[value_column]])), vjust = 1, size = 3, color = "black") +
+      scale_fill_gradient2(low = "steelblue", mid = "white", high = "salmon", midpoint = fill_midpoint) +
       labs(
         title = paste("Retraction Reason Distribution for", input$countryInput),
         x = "Year",
@@ -128,6 +161,12 @@ server <- function(input, output) {
         axis.text.y = element_text(size = 8),
         legend.title = element_text(size = 10),
         legend.text = element_text(size = 8)
+      )
+    
+    ggplotly(p) %>%
+      layout(
+        autosize = TRUE,
+        margin = list(l = 50, r = 50, b = 100, t = 100, pad = 4)
       )
   })
 }
